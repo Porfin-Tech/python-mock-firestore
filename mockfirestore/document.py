@@ -1,16 +1,25 @@
+import operator
 from copy import deepcopy
 from functools import reduce
-import operator
-from typing import List, Dict, Any
+from typing import TYPE_CHECKING, Any, Dict, List
+
 from mockfirestore import NotFound
 from mockfirestore._helpers import (
-    Timestamp, Document, Store, get_by_path, set_by_path, delete_by_path
+    Document,
+    Store,
+    Timestamp,
+    delete_by_path,
+    get_by_path,
+    set_by_path,
 )
 from mockfirestore._transformations import apply_transformations
 
+if TYPE_CHECKING:
+    from mockfirestore.async_collection import CollectionReference
+
 
 class DocumentSnapshot:
-    def __init__(self, reference: 'DocumentReference', data: Document) -> None:
+    def __init__(self, reference: "DocumentReference", data: Document) -> None:
         self.reference = reference
         self._doc = deepcopy(data)
 
@@ -43,7 +52,7 @@ class DocumentSnapshot:
         if not self.exists:
             return None
         else:
-            return reduce(operator.getitem, field_path.split('.'), self._doc)
+            return reduce(operator.getitem, field_path.split("."), self._doc)
 
     def _get_by_field_path(self, field_path: str) -> Any:
         try:
@@ -53,8 +62,9 @@ class DocumentSnapshot:
 
 
 class DocumentReference:
-    def __init__(self, data: Store, path: List[str],
-                 parent: 'CollectionReference') -> None:
+    def __init__(
+        self, data: Store, path: List[str], parent: "CollectionReference"
+    ) -> None:
         self._data = data
         self._path = path
         self.parent = parent
@@ -81,12 +91,13 @@ class DocumentReference:
     def update(self, data: Dict[str, Any]):
         document = get_by_path(self._data, self._path)
         if document == {}:
-            raise NotFound('No document to update: {}'.format(self._path))
+            raise NotFound("No document to update: {}".format(self._path))
 
         apply_transformations(document, deepcopy(data))
 
-    def collection(self, name) -> 'CollectionReference':
+    def collection(self, name) -> "CollectionReference":
         from mockfirestore.collection import CollectionReference
+
         document = get_by_path(self._data, self._path)
         new_path = self._path + [name]
         if name not in document:

@@ -1,7 +1,8 @@
-from typing import List, AsyncIterator
+from typing import AsyncIterator, List
+
+from mockfirestore._helpers import consume_async_iterable
 from mockfirestore.document import DocumentSnapshot
 from mockfirestore.query import Query
-from mockfirestore._helpers import consume_async_iterable
 
 
 class AsyncQuery(Query):

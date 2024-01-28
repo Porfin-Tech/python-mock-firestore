@@ -1,8 +1,9 @@
 from typing import AsyncIterable, Iterable
 
-from mockfirestore.async_document import AsyncDocumentReference
 from mockfirestore.async_collection import AsyncCollectionReference
+from mockfirestore.async_document import AsyncDocumentReference
 from mockfirestore.async_transaction import AsyncTransaction
+from mockfirestore.async_write_batch import AsyncWriteBatch
 from mockfirestore.client import MockFirestore
 from mockfirestore.document import DocumentSnapshot
 
@@ -43,3 +44,6 @@ class AsyncMockFirestore(MockFirestore):
 
     def transaction(self, **kwargs) -> AsyncTransaction:
         return AsyncTransaction(self, **kwargs)
+
+    def batch(self) -> AsyncWriteBatch:
+        return AsyncWriteBatch()

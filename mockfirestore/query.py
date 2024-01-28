@@ -1,8 +1,11 @@
 from itertools import islice, tee
-from typing import Iterator, Any, Optional, List, Callable, Union, Iterable
+from typing import Any, Callable, Iterable, Iterator, List, Optional, Union
 
-from mockfirestore.document import DocumentSnapshot
+from google.cloud import firestore_v1 as firestore
+
 from mockfirestore._helpers import T
+from mockfirestore.aggregation_query import AggregationQuery
+from mockfirestore.document import DocumentSnapshot
 
 
 class Query:
@@ -30,7 +33,10 @@ class Query:
 
         if field_filters:
             for field_filter in field_filters:
-                self._add_field_filter(*field_filter)
+                if isinstance(field_filter, tuple):
+                    self._add_field_filter(*field_filter)
+                else:
+                    self._add_field_filter(filter=field_filter)
 
     def _process_pagination(self, doc_snapshots: Iterator[DocumentSnapshot]):
         if self.orders:
@@ -60,14 +66,44 @@ class Query:
 
         return iter(doc_snapshots)
 
+    def _process_field_filter(
+        self,
+        doc: DocumentSnapshot,
+        filter: Union[
+            firestore.FieldFilter, firestore.And, firestore.Or, tuple[str, str, Any]
+        ],
+    ):
+        if isinstance(filter, firestore.And):
+            result = None
+            for f in filter.filters:
+                if result is None:
+                    result = self._process_field_filter(doc, filter=f)
+                else:
+                    result = result and self._process_field_filter(doc, filter=f)
+            return result
+        elif isinstance(filter, firestore.Or):
+            result = None
+            for f in filter.filters:
+                if result is None:
+                    result = self._process_field_filter(doc, filter=f)
+                else:
+                    result = result or self._process_field_filter(doc, filter=f)
+            return result
+        elif isinstance(filter, firestore.FieldFilter):
+            field, op, value = filter.field_path, filter.op_string, filter.value
+            return self._process_field_filter(doc, (field, op, value))
+        else:
+            field, op, value = filter
+            return self._compare_func(op)(doc._get_by_field_path(field), value)
+
     def _process_field_filters(
         self, doc_snapshots: Iterator[DocumentSnapshot]
     ) -> Iterable[DocumentSnapshot]:
-        for field, compare, value in self._field_filters:
+        for filter in self._field_filters:
             doc_snapshots = [
                 doc_snapshot
                 for doc_snapshot in doc_snapshots
-                if compare(doc_snapshot._get_by_field_path(field), value)
+                if self._process_field_filter(doc_snapshot, filter)
             ]
         return doc_snapshots
 
@@ -79,12 +115,31 @@ class Query:
     def get(self, transaction=None) -> List[DocumentSnapshot]:
         return list(self.stream())
 
-    def _add_field_filter(self, field: str, op: str, value: Any):
-        compare = self._compare_func(op)
-        self._field_filters.append((field, compare, value))
+    def _add_field_filter(
+        self,
+        field: Optional[str] = None,
+        op: Optional[str] = None,
+        value: Any = None,
+        *,
+        filter: Union[firestore.FieldFilter, firestore.And, firestore.Or] = None,
+    ):
+        if filter is not None:
+            self._field_filters.append(filter)
+        else:
+            self._field_filters.append((field, op, value))
 
-    def where(self, field: str, op: str, value: Any) -> "Query":
-        self._add_field_filter(field, op, value)
+    def where(
+        self,
+        field: Optional[str] = None,
+        op: Optional[str] = None,
+        value: Any = None,
+        *,
+        filter: Union[firestore.FieldFilter, firestore.And, firestore.Or] = None,
+    ) -> "Query":
+        if filter is not None:
+            self._add_field_filter(filter=filter)
+        else:
+            self._add_field_filter(field, op, value)
         return self
 
     def order_by(self, key: str, direction: Optional[str] = "ASCENDING") -> "Query":
@@ -122,6 +177,9 @@ class Query:
     ) -> "Query":
         self._end_at = (document_fields_or_snapshot, False)
         return self
+
+    def count(self) -> AggregationQuery:
+        return AggregationQuery(self)
 
     def _apply_cursor(
         self,

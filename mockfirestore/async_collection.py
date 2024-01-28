@@ -1,9 +1,12 @@
-from typing import Optional, List, Tuple, Dict, AsyncIterator, Any, Union
+from typing import Any, AsyncIterator, Dict, List, Optional, Tuple, Union
+
+from google.cloud import firestore_v1 as firestore
+
+from mockfirestore._helpers import Timestamp, get_by_path
 from mockfirestore.async_document import AsyncDocumentReference
 from mockfirestore.async_query import AsyncQuery
 from mockfirestore.collection import CollectionReference
-from mockfirestore.document import DocumentSnapshot, DocumentReference
-from mockfirestore._helpers import Timestamp, get_by_path
+from mockfirestore.document import DocumentReference, DocumentSnapshot
 
 
 class AsyncCollectionReference(CollectionReference):
@@ -14,7 +17,7 @@ class AsyncCollectionReference(CollectionReference):
         )
 
     async def get(self) -> List[DocumentSnapshot]:
-        return super().get()
+        return [_ async for _ in self.stream()]
 
     async def add(
         self, document_data: Dict, document_id: str = None
@@ -37,8 +40,18 @@ class AsyncCollectionReference(CollectionReference):
             doc_snapshot = await self.document(key).get()
             yield doc_snapshot
 
-    def where(self, field: str, op: str, value: Any) -> AsyncQuery:
-        query = AsyncQuery(self, field_filters=[(field, op, value)])
+    def where(
+        self,
+        field: Optional[str] = None,
+        op: Optional[str] = None,
+        value: Any = None,
+        *,
+        filter: Union[firestore.FieldFilter, firestore.And, firestore.Or] = None,
+    ) -> AsyncQuery:
+        if filter is not None:
+            query = AsyncQuery(self, field_filters=[filter])
+        else:
+            query = AsyncQuery(self, field_filters=[(field, op, value)])
         return query
 
     def order_by(self, key: str, direction: Optional[str] = None) -> AsyncQuery:
@@ -53,18 +66,26 @@ class AsyncCollectionReference(CollectionReference):
         query = AsyncQuery(self, offset=offset)
         return query
 
-    def start_at(self, document_fields_or_snapshot: Union[dict, DocumentSnapshot]) -> AsyncQuery:
+    def start_at(
+        self, document_fields_or_snapshot: Union[dict, DocumentSnapshot]
+    ) -> AsyncQuery:
         query = AsyncQuery(self, start_at=(document_fields_or_snapshot, True))
         return query
 
-    def start_after(self, document_fields_or_snapshot: Union[dict, DocumentSnapshot]) -> AsyncQuery:
+    def start_after(
+        self, document_fields_or_snapshot: Union[dict, DocumentSnapshot]
+    ) -> AsyncQuery:
         query = AsyncQuery(self, start_at=(document_fields_or_snapshot, False))
         return query
 
-    def end_at(self, document_fields_or_snapshot: Union[dict, DocumentSnapshot]) -> AsyncQuery:
+    def end_at(
+        self, document_fields_or_snapshot: Union[dict, DocumentSnapshot]
+    ) -> AsyncQuery:
         query = AsyncQuery(self, end_at=(document_fields_or_snapshot, True))
         return query
 
-    def end_before(self, document_fields_or_snapshot: Union[dict, DocumentSnapshot]) -> AsyncQuery:
+    def end_before(
+        self, document_fields_or_snapshot: Union[dict, DocumentSnapshot]
+    ) -> AsyncQuery:
         query = AsyncQuery(self, end_at=(document_fields_or_snapshot, False))
         return query
