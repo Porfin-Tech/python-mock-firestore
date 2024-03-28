@@ -20,8 +20,12 @@ if TYPE_CHECKING:
 
 class DocumentSnapshot:
     def __init__(self, reference: "DocumentReference", data: Document) -> None:
-        self.reference = reference
+        self._reference = reference
         self._doc = deepcopy(data)
+
+    @property
+    def reference(self):
+        return self._reference
 
     @property
     def id(self):
